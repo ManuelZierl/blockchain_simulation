@@ -18,6 +18,9 @@ class Network:
         for miner in self.miners:
             miner.start()
 
+    def mine_next_block(self):
+        pass
+
     def broadcast(self, b):
         # todo broadcst pow to network
         # todo: -> all other miners
@@ -29,6 +32,9 @@ n = Network()
 n.add_miner(Miner(n, 1))
 n.add_miner(Miner(n, 0.5))
 n.add_miner(Miner(n, 0.5))
+print(n.miners[2].verify_transaction((n.miners[0].transaction(n.miners[1].public_key, 100))))
 
 n.show_meta()
+
+
 n.start_mining()
