@@ -1,4 +1,5 @@
 from Miner import Miner
+from Observer import Observer
 
 
 class Network:
@@ -16,7 +17,7 @@ class Network:
 
     def start_mining(self):
         for miner in self.miners:
-            miner.start()
+            miner.start(arg=1)
 
     def mine_next_block(self):
         pass
@@ -29,12 +30,11 @@ class Network:
 
 
 n = Network()
-n.add_miner(Miner(n, 1))
+n.add_miner(Miner(n, 10))
 n.add_miner(Miner(n, 0.5))
 n.add_miner(Miner(n, 0.5))
-print(n.miners[2].verify_transaction((n.miners[0].transaction(n.miners[1].public_key, 100))))
+#o = Observer(n, 3)
+#o.start()
 
-n.show_meta()
-
-
+#n.show_meta()
 n.start_mining()

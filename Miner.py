@@ -6,6 +6,8 @@ import time
 import binascii
 
 import codecs
+
+import _thread
 from ecdsa import SigningKey
 from ecdsa import VerifyingKey
 import ecdsa
@@ -26,8 +28,8 @@ class Miner(threading.Thread):
         self.delay = 1 / power
         self.calls = 0
 
-
         self.transactions = []
+        self.ledger = dict()
         self.chain = []
         if chain is None:
             with open('genesis_block.json') as data_file:
@@ -50,17 +52,80 @@ class Miner(threading.Thread):
         self.__private_key = codecs.encode(private_key.to_string(), 'hex').decode("utf-8")
         self.public_key = codecs.encode(public_key.to_string(), 'hex').decode("utf-8")
 
+    def run(self, blocks=1):
+        # -1  -> no limit
+        # 1: -> mine until this amout of block are mined
+        block_nr = self.chain[-1]["id"]
+        self.transactions.append(self.transaction(self.public_key, 1, sender=""))
+        while self.chain[-1]["id"] != block_nr + blocks:
+            block_hash = hash_block(self.chain[-1])
+            random_str = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
+            dk = hashlib.pbkdf2_hmac('sha1', block_hash, str.encode(random_str), 100)
+            if binascii.hexlify(dk)[-1:] == b'f':
+                print(random_str)
+                block = {
+                    "id": len(self.chain),
+                    "proof": random_str,
+                    "transactions": self.transactions,
+                    "previous_hash": block_hash
+                }
+                # reset transcations
+                self.transactions = []
+                self.transactions.append(self.transaction(self.public_key, 1, sender=""))
+                self.broadcast(block, "pow")
+                self.chain.append(block)
+                if not self.public_key in self.ledger:
+                    self.ledger[self.public_key] = 1
+                else:
+                    self.ledger[self.public_key] += 1
+
+            self.calls += 1
+            time.sleep(self.delay)
+        _thread.exit()
+
     # VERIFICATION
-    def verify_block(self, block):
-        # todo: verfiy a new block
-        # todo: check proof
-        # todo: check for invalid transactions
-        # todo: check if reward has correct amount and coorect adress
-        # todo: ...
-        # todo: check id
-        pass
+    def verify_new_block(self, block):
+        if block["id"] != len(self.chain):
+            return False
+
+        block_hash = hash_block(self.chain[-1])
+        dk = hashlib.pbkdf2_hmac('sha1', block_hash, str.encode(block["proof"]), 100)
+        if not binascii.hexlify(dk)[-1:] == b'f':
+            return False
+
+        block_reward = False
+        for transaction in block["transactions"]:
+            if self.verify_transaction(transaction) is False:
+                if transaction["sender"] == "":
+                    if block_reward is True:
+                        return False
+                    block_reward = True
+                    if transaction["amount"] != 1:
+                        return False
+                    print("VER")
+                    if not transaction["to"] in self.ledger:
+                        self.ledger[transaction["to"]] = 1
+                    else:
+                        self.ledger[transaction["to"]] += 1
+
+                else:
+                    return False
+
+        return True
 
     def verify_transaction(self, transaction):
+        if not "sender" in transaction.keys():
+            return False
+
+        if not transaction["sender"] in self.ledger:
+            return False
+        # todo: check if sum is spendable
+
+        if self.ledger[transaction["sender"]] < transaction["amount"]:
+            return False
+        else:
+            self.ledger[transaction["sender"]] -= transaction["amount"]
+
         transaction_copy = dict(transaction)
         signatur = transaction_copy["signature"]
         transaction_copy.pop('signature', None)
@@ -68,8 +133,8 @@ class Miner(threading.Thread):
 
         public_key = transaction_copy["sender"]
 
-        vk = VerifyingKey.from_string(bytes.fromhex(public_key), curve=ecdsa.SECP256k1)
         try:
+            vk = VerifyingKey.from_string(bytes.fromhex(public_key), curve=ecdsa.SECP256k1)
             if vk.verify(bytes.fromhex(signatur), transaction_string.encode()) is True:
                 return True
             else:
@@ -77,9 +142,17 @@ class Miner(threading.Thread):
         except:
             return False
 
-    def transaction(self, to, amount):
+    def verify(self, chain):
+        # todo
+        # todo: verfiy the validity of a chain
+        # todo: has to verify all blocks/transactions
+        pass
+
+    def transaction(self, to, amount, sender=None):
+        if sender is None:
+            sender = self.public_key
         transaction = {
-            'sender': self.public_key,
+            'sender': sender,
             'to': to,
             'amount': amount,
         }
@@ -90,43 +163,13 @@ class Miner(threading.Thread):
         transaction["signature"] = codecs.encode(signature, 'hex').decode("utf-8")
         return transaction
 
-    def run(self, blocks = 0):
-        # 0  -> no limit
-        # 1: -> mine until this amout of block are mined
-        while True: # todo: blocks
-
-            block_hash = hash_block(self.chain[-1])
-            random_str = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
-            dk = hashlib.pbkdf2_hmac('sha1', block_hash, str.encode(random_str), 100)
-            if binascii.hexlify(dk)[-1:] == b'f': #todo: <-- vllt anpassen?
-                print(self.id, "--->", random_str)
-                # creater new block
-                block = {
-                    "id": self.chain[-1]["id"] + 1,
-                    "proof": random_str,
-                    "transactions": self.transactions,
-                    "previous_hash": block_hash
-                  }
-
-                #reset transcations
-                self.transactions = []
-                self.broadcast(block, "pow")
-                self.chain.append(block)
-
-            self.calls += 1
-            time.sleep(self.delay)
-
-
-
-
-    def verify(self, chain):
-        # todo
-        # todo: verfiy the validity of a chain
-        # todo: has to verify all blocks/transactions
-        pass
-
+    def send(self, to, amount):
+        t = self.transaction(to, amount)
+        self.transactions.append(t)
+        self.broadcast(t, "tra")
 
     # COMMUNICATION
+    # SEND:
     def broadcast(self, data, type=None):
         if type == "pow":
             for miner in self.network.miners:
@@ -138,13 +181,20 @@ class Miner(threading.Thread):
                 if miner != self:
                     miner.broadcast_transaction(data)
 
-
+    # RECEIVE:
     def broadcast_proof_of_work(self, block):
-        # todo: this function is called by other Miners when they try to broadcast a new block
-        pass
+        if block["id"] != len(self.chain):
+            return
+
+        if self.verify_new_block(block) == True:
+            self.transactions = []
+            self.transactions.append(self.transaction(self.public_key, 1, sender=""))
+            self.chain.append(block)
+
+        # todo: mabey there are multiple blocks to verify
+
 
     def broadcast_transaction(self, transaction):
         if self.verify_transaction(transaction) is True:
             self.transactions.append(transaction)
-        # todo: this function is called by other Miners when they try to broadcast a new transaction
         pass
