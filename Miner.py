@@ -8,10 +8,16 @@ import binascii
 import codecs
 
 import _thread
+
+import sys
+from copy import copy
+
 from ecdsa import SigningKey
 from ecdsa import VerifyingKey
 import ecdsa
 import json
+
+from Node import Node
 
 
 def hash_block(block):
@@ -19,16 +25,10 @@ def hash_block(block):
     return binascii.hexlify(hashlib.pbkdf2_hmac('sha1', str.encode(block_string), b'valarmorghulis', 100))
 
 
-class Miner(threading.Thread):
+class Miner(Node):
     def __init__(self, network, power=1, chain=None):
-        threading.Thread.__init__(self)
-        self.network = network
-        self.id = network.miner_count
-        self.power = power
-        self.delay = 1 / power
-        self.calls = 0
+        Node.__init__(self, network, power=power)
 
-        self.transactions = []
         self.ledger = dict()
         self.chain = []
         if chain is None:
@@ -36,7 +36,8 @@ class Miner(threading.Thread):
                 self.chain = json.load(data_file)
         else:
             # todo: this miner joined later in the game
-            # todo: before he starst mining he has to check
+            # todo: before he starts mining he has to get the blockchain
+            # todo: from an other miner and check
             # todo: the entire chain of validity
             pass
 
@@ -44,44 +45,35 @@ class Miner(threading.Thread):
         private_key = SigningKey.generate(curve=ecdsa.SECP256k1)
         public_key = private_key.get_verifying_key()
 
-        """
-        we assume you can't access the private key.
-        Which of course would be possible in principle
-        but this is just a simulation
-        """
         self.__private_key = codecs.encode(private_key.to_string(), 'hex').decode("utf-8")
         self.public_key = codecs.encode(public_key.to_string(), 'hex').decode("utf-8")
 
-    def run(self, blocks=1):
-        # -1  -> no limit
-        # 1: -> mine until this amout of block are mined
-        block_nr = self.chain[-1]["id"]
-        self.transactions.append(self.transaction(self.public_key, 1, sender=""))
-        while self.chain[-1]["id"] != block_nr + blocks:
+        self.transactions = []
+        self.transactions.append(self.transaction(self.public_key, 1, sender=""))  # block reward
+
+    def work(self):
+        while self.blocks_to_go > 0:
             block_hash = hash_block(self.chain[-1])
             random_str = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
             dk = hashlib.pbkdf2_hmac('sha1', block_hash, str.encode(random_str), 100)
             if binascii.hexlify(dk)[-1:] == b'f':
-                print(random_str)
+                print("FOUND BLOCK", self.id, "->", len(self.chain), [x.blocks_to_go for x in self.network.nodes])
                 block = {
                     "id": len(self.chain),
                     "proof": random_str,
                     "transactions": self.transactions,
                     "previous_hash": block_hash
                 }
-                # reset transcations
+                # reset transactions
                 self.transactions = []
                 self.transactions.append(self.transaction(self.public_key, 1, sender=""))
-                self.broadcast(block, "pow")
-                self.chain.append(block)
-                if not self.public_key in self.ledger:
-                    self.ledger[self.public_key] = 1
-                else:
-                    self.ledger[self.public_key] += 1
+
+                new_chain = self.chain + [block]
+
+                self.send_broadcast({"type": "pow", "chain": new_chain})
 
             self.calls += 1
             time.sleep(self.delay)
-        _thread.exit()
 
     # VERIFICATION
     def verify_new_block(self, block):
@@ -93,33 +85,32 @@ class Miner(threading.Thread):
         if not binascii.hexlify(dk)[-1:] == b'f':
             return False
 
-        block_reward = False
+        reward = None
         for transaction in block["transactions"]:
             if self.verify_transaction(transaction) is False:
                 if transaction["sender"] == "":
-                    if block_reward is True:
+                    if reward is not None:
                         return False
-                    block_reward = True
                     if transaction["amount"] != 1:
                         return False
-                    print("VER")
-                    if not transaction["to"] in self.ledger:
-                        self.ledger[transaction["to"]] = 1
-                    else:
-                        self.ledger[transaction["to"]] += 1
 
+                    reward = transaction["to"]
                 else:
                     return False
+
+        if reward not in self.ledger:
+            self.ledger[reward] = 1
+        else:
+            self.ledger[reward] += 1
 
         return True
 
     def verify_transaction(self, transaction):
-        if not "sender" in transaction.keys():
+        if "sender" not in transaction.keys():
             return False
 
         if not transaction["sender"] in self.ledger:
             return False
-        # todo: check if sum is spendable
 
         if self.ledger[transaction["sender"]] < transaction["amount"]:
             return False
@@ -166,33 +157,40 @@ class Miner(threading.Thread):
     def send(self, to, amount):
         t = self.transaction(to, amount)
         self.transactions.append(t)
-        self.broadcast(t, "tra")
+        self.send_broadcast({"type": "tra", "transaction": t})
 
-    # COMMUNICATION
-    # SEND:
-    def broadcast(self, data, type=None):
-        if type == "pow":
-            for miner in self.network.miners:
-                if miner != self:
-                    miner.broadcast_proof_of_work(data)
+    def receive_broadcast(self, data):
+        if data["type"] == "pow":
+            self.broadcast_proof_of_work(data["chain"])
 
-        if type == "tra":
-            for miner in self.network.miners:
-                if miner != self:
-                    miner.broadcast_transaction(data)
+        if data["type"] == "tra":
+            self.broadcast_transaction(data["transaction"])
 
-    # RECEIVE:
-    def broadcast_proof_of_work(self, block):
-        if block["id"] != len(self.chain):
+    def broadcast_proof_of_work(self, chain):
+        if len(chain) <= len(self.chain):
             return
 
-        if self.verify_new_block(block) == True:
-            self.transactions = []
-            self.transactions.append(self.transaction(self.public_key, 1, sender=""))
-            self.chain.append(block)
+        last_matching = None
+        for i in range(len(self.chain)):
+            if chain[i] == self.chain[i]:
+                last_matching = i
 
-        # todo: mabey there are multiple blocks to verify
+        new_blocks = chain[last_matching + 1:]
+        old_chain = copy(self.chain)
+        old_ledger = copy(self.ledger)
 
+        for block in new_blocks:
+            if self.verify_new_block(block):
+                self.chain.append(block)
+            else:
+                self.chain = old_chain
+                self.ledger = old_ledger
+                return
+
+        self.blocks_to_go -= len(new_blocks)
+
+        self.transactions = []
+        self.transactions.append(self.transaction(self.public_key, 1, sender=""))
 
     def broadcast_transaction(self, transaction):
         if self.verify_transaction(transaction) is True:

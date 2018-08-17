@@ -4,37 +4,35 @@ from Observer import Observer
 
 class Network:
     def __init__(self):
-        self.miners = []
-        self.miner_count = 0
+        self.nodes = []
+        self.nodes_count = 0
 
     def show_meta(self):
-        for miner in self.miners:
+        for miner in self.nodes:
             print("MINER: " + str(miner.id), " POWER: " + str(miner.power), " DELAY:" + str(miner.delay))
 
-    def add_miner(self, miner):
-        self.miner_count += 1
-        self.miners.append(miner)
+    def add_node(self, node):
+        self.nodes_count += 1
+        self.nodes.append(node)
 
-    def start_mining(self):
-        for miner in self.miners:
-            miner.start(arg=1)
+    def start_working(self, blocks=1):
+        for node in self.nodes:
+            node.run(blocks)
 
-    def mine_next_block(self):
-        pass
+    def new_miners(self, amount, power):
+        for i in range(amount):
+            self.add_node(Miner(self, power))
 
-    def broadcast(self, b):
-        # todo broadcst pow to network
-        # todo: -> all other miners
-        pass
+# n = Network()
+# n.add_node(Miner(n, 20))
+# n.add_node(Miner(n, 20))
+# n.add_node(Miner(n, 20))
+#
+# n.start_working(blocks=5)
+#
 
-
-
-n = Network()
-n.add_miner(Miner(n, 10))
-n.add_miner(Miner(n, 0.5))
-n.add_miner(Miner(n, 0.5))
 #o = Observer(n, 3)
 #o.start()
 
 #n.show_meta()
-n.start_mining()
+
