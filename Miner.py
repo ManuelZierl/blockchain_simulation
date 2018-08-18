@@ -31,6 +31,7 @@ class Miner(Node):
 
         self.ledger = dict()
         self.chain = []
+        self.LOCK = threading.Lock()
         if chain is None:
             with open('genesis_block.json') as data_file:
                 self.chain = json.load(data_file)
@@ -160,33 +161,45 @@ class Miner(Node):
         self.send_broadcast({"type": "tra", "transaction": t})
 
     def receive_broadcast(self, data):
+        self.LOCK.acquire()
         if data["type"] == "pow":
             self.broadcast_proof_of_work(data["chain"])
 
         if data["type"] == "tra":
             self.broadcast_transaction(data["transaction"])
+        self.LOCK.release()
 
     def broadcast_proof_of_work(self, chain):
+        print("I AM " + str(self.id) + ": ")
         if len(chain) <= len(self.chain):
+            print("CHAIN IS SHORTER", len(self.chain), len(chain))
             return
+
+        print("CHAIN HAS CORRECT LENGTH")
 
         last_matching = None
         for i in range(len(self.chain)):
             if chain[i] == self.chain[i]:
                 last_matching = i
 
+        print("LAST MATCHING IS: ", last_matching)
+
         new_blocks = chain[last_matching + 1:]
+        print("MEANS WE HAVE ", len(new_blocks), " NEW BLOCKS")
         old_chain = copy(self.chain)
         old_ledger = copy(self.ledger)
 
+        print("LETS TRY TO VERIFY THOSE")
         for block in new_blocks:
             if self.verify_new_block(block):
                 self.chain.append(block)
             else:
+                print("NEW BLOCKS ARE NOT CORRECT")
                 self.chain = old_chain
                 self.ledger = old_ledger
                 return
 
+        print("NEW BLOCKS ARE ALL VERIFIEDcd ")
         self.blocks_to_go -= len(new_blocks)
 
         self.transactions = []
@@ -196,3 +209,12 @@ class Miner(Node):
         if self.verify_transaction(transaction) is True:
             self.transactions.append(transaction)
         pass
+
+
+    # console utils
+    def show_ledger(self):
+        sys.stdout.write(str(self.id) + " LEDGER: "+ "\n")
+        for key in self.ledger.keys():
+            sys.stdout.write(str(key[:5]) + ":" + str(self.ledger[key]) + "\n")
+        sys.stdout.write("\n\n")
+

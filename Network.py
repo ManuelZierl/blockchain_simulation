@@ -23,6 +23,12 @@ class Network:
         for i in range(amount):
             self.add_node(Miner(self, power))
 
+    def consensus(self):
+        for node in self.nodes:
+            # todo check hom may differnet chains
+            # todo check how many different ledgers
+            pass
+
 # n = Network()
 # n.add_node(Miner(n, 20))
 # n.add_node(Miner(n, 20))
