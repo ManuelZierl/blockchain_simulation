@@ -1,6 +1,6 @@
 from Miner import Miner
 from Observer import Observer
-
+import atexit
 
 class Network:
     def __init__(self):
@@ -23,10 +23,21 @@ class Network:
         for i in range(amount):
             self.add_node(Miner(self, power))
 
-# n = Network()
-# n.add_node(Miner(n, 20))
-# n.add_node(Miner(n, 20))
-# n.add_node(Miner(n, 20))
+
+
+n = Network()
+n.add_node(Miner(n, 0.5))
+n.add_node(Miner(n, 0.5))
+n.add_node(Miner(n, 0.5))
+n.add_node(Miner(n, 0.5))
+
+n.start_working(blocks=5)
+
+def atexit_x():
+    for node in n.nodes:
+        node.show_ledger()
+
+atexit.register(atexit_x)
 #
 # n.start_working(blocks=5)
 #

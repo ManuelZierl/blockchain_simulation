@@ -196,3 +196,12 @@ class Miner(Node):
         if self.verify_transaction(transaction) is True:
             self.transactions.append(transaction)
         pass
+
+
+    # console utils
+    def show_ledger(self):
+        sys.stdout.write(str(self.id) + " LEDGER: "+ "\n")
+        for key in self.ledger.keys():
+            sys.stdout.write(str(key[:5]) + ":" + str(self.ledger[key]) + "\n")
+        sys.stdout.write("\n\n")
+
