@@ -3,6 +3,7 @@
     "id": 0,
     "proof": "ifrt153ouh",
     "transactions": [],
+    "difficulty": 1,
     "previous_hash": "genesisblg"
   }
 ]

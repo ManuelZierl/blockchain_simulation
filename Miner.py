@@ -36,6 +36,14 @@ class Miner(Node):
             with open('genesis_block.json') as data_file:
                 self.chain = json.load(data_file)
         else:
+            for i in range(1, len(chain) + 1):
+                self.chain.append(chain[i - 1])
+
+                if i < len(chain):
+                    if self.verify_new_block(chain[i]) is False:
+                        raise Exception("YOU HAVE TYRIED TO INIT A NEW NODE WITH A INVALID CHAIN")
+
+
             # todo: this miner joined later in the game
             # todo: before he starts mining he has to get the blockchain
             # todo: from an other miner and check
@@ -57,12 +65,13 @@ class Miner(Node):
             block_hash = hash_block(self.chain[-1])
             random_str = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
             dk = hashlib.pbkdf2_hmac('sha1', block_hash, str.encode(random_str), 100)
-            if binascii.hexlify(dk)[-1:] == b'f':
+            if binascii.hexlify(dk)[-1 * self.network.difficulty:] == b'f' * self.network.difficulty:
                 print("FOUND BLOCK", self.id, "->", len(self.chain), [x.blocks_to_go for x in self.network.nodes])
                 block = {
                     "id": len(self.chain),
                     "proof": random_str,
                     "transactions": self.transactions,
+                    "difficulty": self.network.difficulty,
                     "previous_hash": block_hash
                 }
                 # reset transactions
@@ -83,7 +92,8 @@ class Miner(Node):
 
         block_hash = hash_block(self.chain[-1])
         dk = hashlib.pbkdf2_hmac('sha1', block_hash, str.encode(block["proof"]), 100)
-        if not binascii.hexlify(dk)[-1:] == b'f':
+        difficulty = block["difficulty"]
+        if not binascii.hexlify(dk)[-1 * difficulty:] == b'f' * difficulty:
             return False
 
         reward = None
@@ -98,6 +108,15 @@ class Miner(Node):
                     reward = transaction["to"]
                 else:
                     return False
+
+        # everything ok with this block:
+        for transaction in block["transactions"]:
+            if transaction["sender"] != "":
+                self.ledger[transaction["sender"]] -= transaction["amount"]
+                if transaction["to"] not in self.ledger:
+                    self.ledger[transaction["to"]] = transaction["amount"]
+                else:
+                    self.ledger[transaction["to"]] += transaction["amount"]
 
         if reward not in self.ledger:
             self.ledger[reward] = 1
@@ -115,8 +134,6 @@ class Miner(Node):
 
         if self.ledger[transaction["sender"]] < transaction["amount"]:
             return False
-        else:
-            self.ledger[transaction["sender"]] -= transaction["amount"]
 
         transaction_copy = dict(transaction)
         signatur = transaction_copy["signature"]
@@ -170,36 +187,26 @@ class Miner(Node):
         self.LOCK.release()
 
     def broadcast_proof_of_work(self, chain):
-        print("I AM " + str(self.id) + ": ")
         if len(chain) <= len(self.chain):
-            print("CHAIN IS SHORTER", len(self.chain), len(chain))
             return
-
-        print("CHAIN HAS CORRECT LENGTH")
 
         last_matching = None
         for i in range(len(self.chain)):
             if chain[i] == self.chain[i]:
                 last_matching = i
 
-        print("LAST MATCHING IS: ", last_matching)
-
         new_blocks = chain[last_matching + 1:]
-        print("MEANS WE HAVE ", len(new_blocks), " NEW BLOCKS")
         old_chain = copy(self.chain)
         old_ledger = copy(self.ledger)
 
-        print("LETS TRY TO VERIFY THOSE")
         for block in new_blocks:
             if self.verify_new_block(block):
                 self.chain.append(block)
             else:
-                print("NEW BLOCKS ARE NOT CORRECT")
                 self.chain = old_chain
                 self.ledger = old_ledger
                 return
 
-        print("NEW BLOCKS ARE ALL VERIFIEDcd ")
         self.blocks_to_go -= len(new_blocks)
 
         self.transactions = []
@@ -210,11 +217,17 @@ class Miner(Node):
             self.transactions.append(transaction)
         pass
 
-
     # console utils
     def show_ledger(self):
-        sys.stdout.write(str(self.id) + " LEDGER: "+ "\n")
+        sys.stdout.write(str(self.id) + " LEDGER: " + "\n")
         for key in self.ledger.keys():
             sys.stdout.write(str(key[:5]) + ":" + str(self.ledger[key]) + "\n")
         sys.stdout.write("\n\n")
 
+    def save_chain(self, name):
+        with open(name + '.json', 'w') as outfile:
+            json.dump(self.chain, outfile)
+
+    def save_ledger(self, name):
+        with open(name + '.json', 'w') as outfile:
+            json.dump(self.ledger, outfile)

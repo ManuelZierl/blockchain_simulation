@@ -6,6 +6,7 @@ class Network:
     def __init__(self):
         self.nodes = []
         self.nodes_count = 0
+        self.difficulty = 1
 
     def show_meta(self):
         for miner in self.nodes:
@@ -24,10 +25,14 @@ class Network:
             self.add_node(Miner(self, power))
 
     def consensus(self):
-        for node in self.nodes:
-            # todo check hom may differnet chains
-            # todo check how many different ledgers
-            pass
+        for i in range(1, len(self.nodes)):
+            if not self.nodes[i - 1].ledger == self.nodes[i].ledger:
+                return False
+
+            if not self.nodes[i - 1].chain == self.nodes[i].chain:
+                return False
+
+        return True
 
 # n = Network()
 # n.add_node(Miner(n, 20))
@@ -37,8 +42,7 @@ class Network:
 # n.start_working(blocks=5)
 #
 
-#o = Observer(n, 3)
-#o.start()
+# o = Observer(n, 3)
+# o.start()
 
-#n.show_meta()
-
+# n.show_meta()
