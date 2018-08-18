@@ -66,7 +66,7 @@ class Miner(Node):
             random_str = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
             dk = hashlib.pbkdf2_hmac('sha1', block_hash, str.encode(random_str), 100)
             if binascii.hexlify(dk)[-1 * self.network.difficulty:] == b'f' * self.network.difficulty:
-                print("FOUND BLOCK", self.id, "->", len(self.chain), [x.blocks_to_go for x in self.network.nodes])
+                print("MINER " + str(self.id) + "  FOUND BLOCK")
                 block = {
                     "id": len(self.chain),
                     "proof": random_str,
@@ -219,10 +219,40 @@ class Miner(Node):
 
     # console utils
     def show_ledger(self):
-        sys.stdout.write(str(self.id) + " LEDGER: " + "\n")
+        sys.stdout.write( "   LEDGER OF MINER "+ str(self.id) + ": " + "\n")
+        miners = self.network.nodes
         for key in self.ledger.keys():
-            sys.stdout.write(str(key[:5]) + ":" + str(self.ledger[key]) + "\n")
+            id = next(x.id for x in self.network.nodes if x.public_key == key)
+            sys.stdout.write("MINER " + str(id) + " " + str(key[:5]) + "... :" + str(self.ledger[key]) + "\n")
         sys.stdout.write("\n\n")
+
+    def show_chain(self):
+        for block in self.chain:
+            sys.stdout.write (" +---------------------+\n") # 24 + - - - - - - - - - - +
+            sys.stdout.write((" | BLOCK NR: " + str(block["id"])).ljust(23) + "|\n")
+            sys.stdout.write (" + - - - - - - - - - - +\n")
+            sys.stdout.write((" | PROOF: " + str(block["proof"])).ljust(23) + "|\n")
+            sys.stdout.write (" + - - - - - - - - - - +\n")
+            sys.stdout.write((" | TRANSACTIONS: " + str(len(block["transactions"]))).ljust(23) + "|\n")
+            for transaction in block["transactions"]:
+                sender = transaction["sender"]
+                if sender == "":
+                    sender = "reward"
+                sys.stdout.write(" |                     |\n")
+                sys.stdout.write((" | from: "+ str(sender)[:5]).ljust(23) +"|\n")
+                sys.stdout.write((" | to: "+ str(transaction["to"][:5]) + "...").ljust(23) +"|\n")
+                sys.stdout.write((" | amount: "+ str(transaction["amount"])).ljust(23) +"|\n")
+
+            sys.stdout.write(" + - - - - - - - - - - +\n")
+            sys.stdout.write((" | DIFF: " + str(block["difficulty"])).ljust(23) + "|\n")
+            sys.stdout.write(" + - - - - - - - - - - +\n")
+            sys.stdout.write((" | PREV_H: " + str(block["previous_hash"][:5]) + "...").ljust(23) + "|\n")
+            sys.stdout.write(" +---------------------+\n\n")
+
+           # print(block)
+            pass
+
+        pass
 
     def save_chain(self, name):
         with open(name + '.json', 'w') as outfile:

@@ -33,16 +33,3 @@ class Network:
                 return False
 
         return True
-
-# n = Network()
-# n.add_node(Miner(n, 20))
-# n.add_node(Miner(n, 20))
-# n.add_node(Miner(n, 20))
-#
-# n.start_working(blocks=5)
-#
-
-# o = Observer(n, 3)
-# o.start()
-
-# n.show_meta()
