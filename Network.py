@@ -1,6 +1,4 @@
 from Miner import Miner
-from Observer import Observer
-
 
 class Network:
     def __init__(self):
@@ -31,5 +29,4 @@ class Network:
 
             if not self.nodes[i - 1].chain == self.nodes[i].chain:
                 return False
-
         return True

@@ -4,26 +4,18 @@ import string
 import threading
 import time
 import binascii
-
 import codecs
-
-import _thread
-
 import sys
-from copy import copy
-
-from ecdsa import SigningKey
-from ecdsa import VerifyingKey
 import ecdsa
 import json
-
+from copy import copy
+from ecdsa import SigningKey
+from ecdsa import VerifyingKey
 from Node import Node
-
 
 def hash_block(block):
     block_string = str(block)
     return binascii.hexlify(hashlib.pbkdf2_hmac('sha1', str.encode(block_string), b'valarmorghulis', 100))
-
 
 class Miner(Node):
     def __init__(self, network, power=1, chain=None):
@@ -43,14 +35,6 @@ class Miner(Node):
                     if self.verify_new_block(chain[i]) is False:
                         raise Exception("YOU HAVE TYRIED TO INIT A NEW NODE WITH A INVALID CHAIN")
 
-
-            # todo: this miner joined later in the game
-            # todo: before he starts mining he has to get the blockchain
-            # todo: from an other miner and check
-            # todo: the entire chain of validity
-            pass
-
-        # generate keys
         private_key = SigningKey.generate(curve=ecdsa.SECP256k1)
         public_key = private_key.get_verifying_key()
 
@@ -58,7 +42,7 @@ class Miner(Node):
         self.public_key = codecs.encode(public_key.to_string(), 'hex').decode("utf-8")
 
         self.transactions = []
-        self.transactions.append(self.transaction(self.public_key, 1, sender=""))  # block reward
+        self.transactions.append(self.transaction(self.public_key, 1, sender=""))
 
     def work(self):
         while self.blocks_to_go > 0:
@@ -74,12 +58,11 @@ class Miner(Node):
                     "difficulty": self.network.difficulty,
                     "previous_hash": block_hash
                 }
-                # reset transactions
+
                 self.transactions = []
                 self.transactions.append(self.transaction(self.public_key, 1, sender=""))
 
                 new_chain = self.chain + [block]
-
                 self.send_broadcast({"type": "pow", "chain": new_chain})
 
             self.calls += 1
@@ -109,7 +92,6 @@ class Miner(Node):
                 else:
                     return False
 
-        # everything ok with this block:
         for transaction in block["transactions"]:
             if transaction["sender"] != "":
                 self.ledger[transaction["sender"]] -= transaction["amount"]
@@ -150,12 +132,6 @@ class Miner(Node):
                 return False
         except:
             return False
-
-    def verify(self, chain):
-        # todo
-        # todo: verfiy the validity of a chain
-        # todo: has to verify all blocks/transactions
-        pass
 
     def transaction(self, to, amount, sender=None):
         if sender is None:
@@ -219,11 +195,11 @@ class Miner(Node):
 
     # console utils
     def show_ledger(self):
-        sys.stdout.write( "   LEDGER OF MINER "+ str(self.id) + ": " + "\n")
+        sys.stdout.write( "LEDGER OF MINER "+ str(self.id) + ": " + "\n")
         miners = self.network.nodes
         for key in self.ledger.keys():
             id = next(x.id for x in self.network.nodes if x.public_key == key)
-            sys.stdout.write("MINER " + str(id) + " " + str(key[:5]) + "... :" + str(self.ledger[key]) + "\n")
+            sys.stdout.write("   MINER " + str(id) + " (" + str(key[:5]) + "... ): " + str(self.ledger[key]) + "\n")
         sys.stdout.write("\n\n")
 
     def show_chain(self):
@@ -239,14 +215,14 @@ class Miner(Node):
                 if sender == "":
                     sender = "reward"
                 sys.stdout.write(" |                     |\n")
-                sys.stdout.write((" | from: "+ str(sender)[:5]).ljust(23) +"|\n")
-                sys.stdout.write((" | to: "+ str(transaction["to"][:5]) + "...").ljust(23) +"|\n")
+                sys.stdout.write((" | from: "+ str(sender)[:7] + "...").ljust(23) +"|\n")
+                sys.stdout.write((" | to: "+ str(transaction["to"][:8]) + "...").ljust(23) +"|\n")
                 sys.stdout.write((" | amount: "+ str(transaction["amount"])).ljust(23) +"|\n")
 
             sys.stdout.write(" + - - - - - - - - - - +\n")
             sys.stdout.write((" | DIFF: " + str(block["difficulty"])).ljust(23) + "|\n")
             sys.stdout.write(" + - - - - - - - - - - +\n")
-            sys.stdout.write((" | PREV_H: " + str(block["previous_hash"][:5]) + "...").ljust(23) + "|\n")
+            sys.stdout.write((" | PREV_H: " + str(block["previous_hash"])[:5] + "...").ljust(23) + "|\n")
             sys.stdout.write(" +---------------------+\n\n")
 
            # print(block)
