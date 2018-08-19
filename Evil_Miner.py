@@ -17,19 +17,24 @@ def hash_block(block):
     block_string = str(block)
     return binascii.hexlify(hashlib.pbkdf2_hmac('sha1', str.encode(block_string), b'valarmorghulis', 100))
 
-class Miner(Node):
-    def __init__(self, network, power=1, chain=None):
+class Evil_Miner(Node):
+    def __init__(self, network, power=1, chain=None, secret_working=False):
         Node.__init__(self, network, power=power)
 
         self.ledger = dict()
         self.chain = []
+        self.secret_chain = []
         self.LOCK = threading.Lock()
+        self.secret_working = secret_working
         if chain is None:
             with open('genesis_block.json') as data_file:
                 self.chain = json.load(data_file)
+            with open('genesis_block.json') as data_file:
+                self.secret_chain = json.load(data_file)
         else:
             for i in range(1, len(chain) + 1):
                 self.chain.append(chain[i - 1])
+                self.secret_chain.append(chain[i - 1])
 
                 if i < len(chain):
                     if self.verify_new_block(chain[i]) is False:
@@ -54,13 +59,17 @@ class Miner(Node):
                 if time.time() > end:
                     break
 
-            block_hash = hash_block(self.chain[-1])
+            current_chain = self.chain
+            if self.secret_working is True:
+                current_chain = self.secret_chain
+
+            block_hash = hash_block(current_chain[-1])
             random_str = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
             dk = hashlib.pbkdf2_hmac('sha1', block_hash, str.encode(random_str), 100)
             if binascii.hexlify(dk)[-1 * self.network.difficulty:] == b'f' * self.network.difficulty:
-                print("MINER " + str(self.id) + "  FOUND BLOCK")
+                print("EVIL_MINER " + str(self.id) + "  FOUND BLOCK")
                 block = {
-                    "id": len(self.chain),
+                    "id": len(current_chain),
                     "proof": random_str,
                     "transactions": self.transactions,
                     "difficulty": self.network.difficulty,
@@ -71,7 +80,11 @@ class Miner(Node):
                 self.transactions.append(self.transaction(self.public_key, 1, sender=""))
 
                 new_chain = self.chain + [block]
-                self.send_broadcast({"type": "pow", "chain": new_chain})
+                if self.secret_working == True:
+                    self.secret_chain += [block]
+
+                else:
+                    self.send_broadcast({"type": "pow", "chain": new_chain})
 
             self.calls += 1
             time.sleep(self.delay)
@@ -178,17 +191,27 @@ class Miner(Node):
             if chain[i] == self.chain[i]:
                 last_matching = i
 
+
+
         new_blocks = chain[last_matching + 1:]
         old_chain = copy(self.chain)
         old_ledger = copy(self.ledger)
 
         self.chain = []
+        if self.secret_working is False:
+            self.secret_chain = []
         self.ledger = dict()
         for i in range(1, len(chain) + 1):
             self.chain.append(chain[i - 1])
+            if self.secret_working is False:
+                self.secret_chain.append(chain[i - 1])
+
+
             if i < len(chain):
                 if self.verify_new_block(chain[i]) is False:
                     self.chain = old_chain
+                    if self.secret_working is False:
+                        self.secret_chain = old_chain
                     self.ledger = old_ledger
                     return
 

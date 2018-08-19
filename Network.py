@@ -4,19 +4,18 @@ class Network:
     def __init__(self):
         self.nodes = []
         self.nodes_count = 0
-        self.difficulty = 1
+        self.difficulty = 2
 
     def show_meta(self):
         for miner in self.nodes:
             print("MINER: " + str(miner.id), " POWER: " + str(miner.power), " DELAY:" + str(miner.delay))
 
     def add_node(self, node):
-        self.nodes_count += 1
         self.nodes.append(node)
 
-    def start_working(self, blocks=1):
+    def start_working(self, blocks=1, time = None):
         for node in self.nodes:
-            node.run(blocks)
+            node.run(blocks, time)
 
     def new_miners(self, amount, power):
         for i in range(amount):
